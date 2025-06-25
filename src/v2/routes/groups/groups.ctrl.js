@@ -4,10 +4,12 @@ const { MemberData } = require("../../../models/Group/MemberData");
 const { Counter } = require("../../../models/Counter/Counter");
 const { userUpdateBySolvedac } = require("../../../services/userUpdate");
 const { checkRole } = require("../../../utils/checkRole");
+const { formatDate } = require("../../../utils/formatDate");
+const { groupRank } = require("../../../utils/checkRank");
 const logger = require("../../../../logger");
-const moment = require("moment-timezone");
 
-const GROUP_LIMIT = 3;
+const GROUP_LIMIT = 5;
+const MEMBER_LIMIT = 30;
 
 const get = {
   all: async (req, res) => {
@@ -43,13 +45,13 @@ const get = {
 
       const { role } = await checkRole(groupId, user._id);
 
-      const group = await Group.findOne({ _id: groupId }, "-__v -members")
+      let group = await Group.findOne({ _id: groupId }, "-__v -members")
         .populate({
           path: "memberData",
           select: "-_id initialStreak score count",
           populate: {
             path: "user",
-            select: "-_id name handle currentStreak imgSrc tier",
+            select: "name handle currentStreak imgSrc tier",
           },
         })
         .populate("admin", "-_id handle name")
@@ -62,28 +64,16 @@ const get = {
           .json({ success: false, message: "그룹을 찾을 수 없습니다." });
       }
 
-      const groupScore = group.score;
-      const groupCount = group.count;
-      const groupMaxStreak = group.maxStreak;
-
-      const scoreRank =
-        (await Group.countDocuments({ score: { $gt: groupScore } })) + 1;
-      const countRank =
-        (await Group.countDocuments({ count: { $gt: groupCount } })) + 1;
-      const streakRank =
-        (await Group.countDocuments({ maxStreak: { $gt: groupMaxStreak } })) +
-        1;
+      group = await groupRank(group);
 
       if (role !== "admin") {
         delete group.applications;
       }
 
-      group.createdAt = moment(group.createdAt).tz("Asia/Seoul").format();
-      group.updatedAt = moment(group.updatedAt).tz("Asia/Seoul").format();
+      group.createdAt = formatDate(group.createdAt);
+      group.updatedAt = formatDate(group.updatedAt);
       group.isMember = role !== "none";
-      group.scoreRank = scoreRank;
-      group.countRank = countRank;
-      group.streakRank = streakRank;
+
       group.memberData = group.memberData.map((member) => ({
         name: member.user.name,
         handle: member.user.handle,
@@ -92,11 +82,16 @@ const get = {
         maxStreak: member.user.currentStreak - member.initialStreak,
         score: member.score,
         count: member.count,
+        todaySolved: group.todaySolvedMembers.some(
+          (solvedMember) =>
+            solvedMember._id.toString() === member.user._id.toString()
+        ),
       }));
 
       return res.status(200).json({
         success: true,
         group,
+        userRole: role,
       });
     } catch (error) {
       logger.error(`${error}`);
@@ -223,13 +218,10 @@ const post = {
       }
 
       const { groupId } = req.params;
-      const { success, role } = await checkRole(
-        req.params.groupId,
-        req.user._id
-      );
 
       // 그룹 가져오기
-      const group = await Group.findById(groupId);
+      const group = await Group.findById(groupId).lean();
+
       if (!group) {
         return res
           .status(404)
@@ -241,6 +233,19 @@ const post = {
           .status(200)
           .json({ success: false, message: "활동을 종료한 그룹입니다." });
       }
+
+      // 그룹 정원 초과
+      if (group.size >= MEMBER_LIMIT) {
+        return res.status(200).json({
+          success: false,
+          message: `멤버는 ${MEMBER_LIMIT}명을 초과할 수 없습니다.`,
+        });
+      }
+
+      const { success, role } = await checkRole(
+        req.params.groupId,
+        req.user._id
+      );
 
       if (!success) {
         return res
@@ -284,6 +289,7 @@ const post = {
 
       // 그룹 가져오기
       const group = await Group.findById(groupId);
+
       if (!group) {
         return res
           .status(404)
@@ -296,7 +302,17 @@ const post = {
           .json({ success: false, message: "활동을 종료한 그룹입니다." });
       }
 
-      const check = await User.findOne({ handle }).select("joinedGroupList");
+      // 그룹 정원 초과
+      if (group.size >= MEMBER_LIMIT) {
+        return res.status(200).json({
+          success: false,
+          message: `멤버는 ${MEMBER_LIMIT}명을 초과할 수 없습니다.`,
+        });
+      }
+
+      const check = await User.findOne({ handle })
+        .select("joinedGroupList")
+        .lean();
 
       if (check.joinedGroupList.length >= GROUP_LIMIT) {
         return res.status(200).json({
@@ -332,6 +348,7 @@ const post = {
       const isApplied = await group.applications.some(
         (app) => app.toString() === user._id.toString()
       );
+
       if (!isApplied) {
         return res
           .status(400)

@@ -30,13 +30,11 @@ const auth = require("./src/v2/routes/auths");
 const groups = require("./src/v2/routes/groups");
 const rankings = require("./src/v2/routes/rankings");
 const search = require("./src/v2/routes/search");
-const status = require("./src/v2/routes/status");
 
 app.use("/api/v2/users", users);
 app.use("/api/v2/auth", auth);
 app.use("/api/v2/groups", groups);
 app.use("/api/v2/rankings", rankings);
 app.use("/api/v2/search", search);
-app.use("/api/v2/status", status);
 
 module.exports = app;

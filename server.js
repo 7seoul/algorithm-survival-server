@@ -5,7 +5,7 @@ const logger = require("./logger");
 const autoUpdate = require("./src/services/autoUpdate");
 const { initGroupResetJob } = require("./src/scheduler/groupReset");
 
-const migration = require("./migration");
+// const migration = require("./migration");
 
 dotenv.config();
 

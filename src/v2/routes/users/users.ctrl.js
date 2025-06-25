@@ -1,34 +1,39 @@
 const { User } = require("../../../models/User/User");
 const { userUpdateByScrap } = require("../../../services/userUpdate");
+const { userRank } = require("../../../utils/checkRank");
+const { formatDate } = require("../../../utils/formatDate");
 const logger = require("../../../../logger");
-const moment = require("moment-timezone");
 
 const get = {
   info: async (req, res) => {
     try {
-      const user = await User.findOne(
-        { handle: req.params.handle },
-        "-_id -__v -password -token"
-      )
-        .populate("joinedGroupList", "groupName score")
+      const handle = req.params.handle;
+      let user = await User.findOne({ handle })
+        .select("-password -initialCount -currentCount -__v")
+        .populate(
+          "joinedGroupList",
+          "groupName _id description score maxStreak size"
+        )
         .lean();
 
-      const userScore = user.score;
-      const userCount = user.count;
-      const userMaxStreak = user.maxStreak;
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "찾을 수 없는 아이디 입니다." });
+      }
 
-      const scoreRank =
-        (await User.countDocuments({ score: { $gt: userScore } })) + 1;
-      const countRank =
-        (await User.countDocuments({ count: { $gt: userCount } })) + 1;
-      const streakRank =
-        (await User.countDocuments({ maxStreak: { $gt: userMaxStreak } })) + 1;
+      user = await userRank(user);
 
-      user.scoreRank = scoreRank;
-      user.countRank = countRank;
-      user.streakRank = streakRank;
-      user.createdAt = moment(user.createdAt).tz("Asia/Seoul").format();
-      user.updatedAt = moment(user.updatedAt).tz("Asia/Seoul").format();
+      for (let i = 0; i < 31; ++i) {
+        user.current[i] -= user.initial[i];
+      }
+
+      user.createdAt = formatDate(user.createdAt);
+      user.updatedAt = formatDate(user.updatedAt);
+      user.currentStreak = user.currentStreak - user.initialStreak;
+
+      delete user.initial;
+      delete user.initialStreak;
 
       return res.status(200).json({
         success: true,
@@ -43,7 +48,7 @@ const get = {
   },
   all: async (req, res) => {
     try {
-      const users = await User.find({}, "-_id -__v -password -token").lean();
+      const users = await User.find({}, "-_id -__v -password").lean();
       return res.status(200).json({
         success: true,
         users,
@@ -57,7 +62,9 @@ const get = {
   },
   updateInfo: async (req, res) => {
     try {
+      const startTime = Date.now();
       const user = await userUpdateByScrap(req.params.handle);
+      const elapsedTime = Date.now() - startTime;
 
       if (!user) {
         return res
@@ -86,12 +93,13 @@ const get = {
       userObj.scoreRank = scoreRank;
       userObj.countRank = countRank;
       userObj.streakRank = streakRank;
-      userObj.createdAt = moment(user.createdAt).tz("Asia/Seoul").format();
-      userObj.updatedAt = moment(user.updatedAt).tz("Asia/Seoul").format();
+      userObj.createdAt = formatDate(user.createdAt);
+      userObj.updatedAt = formatDate(user.updatedAt);
 
       return res.status(200).json({
         success: true,
         user: userObj,
+        time: `${elapsedTime}ms`,
       });
     } catch (error) {
       logger.error(`${error}`);
@@ -119,7 +127,7 @@ const post = {
         },
         { new: true }
       )
-        .select("-_id -__v -password -token")
+        .select("-_id -__v -password")
         .populate("joinedGroupList", "groupName score");
 
       const userScore = user.score;
@@ -138,8 +146,8 @@ const post = {
       userObj.scoreRank = scoreRank;
       userObj.countRank = countRank;
       userObj.streakRank = streakRank;
-      userObj.createdAt = moment(user.createdAt).tz("Asia/Seoul").format();
-      userObj.updatedAt = moment(user.updatedAt).tz("Asia/Seoul").format();
+      userObj.createdAt = formatDate(user.createdAt);
+      userObj.updatedAt = formatDate(user.updatedAt);
 
       return res.status(200).json({
         success: true,

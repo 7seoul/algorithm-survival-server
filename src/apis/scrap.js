@@ -112,7 +112,7 @@ const profile = async (handle) => {
         if (i >= 31) return false;
 
         const $tds = $(tr).find("td");
-        const countText = $tds.eq(1).find("b").text().trim();
+        const countText = $tds.eq(1).find("b").text().trim().replace(/,/g, "");
         const count = parseInt(countText, 10);
         current[i] = isNaN(count) ? 0 : count;
       });

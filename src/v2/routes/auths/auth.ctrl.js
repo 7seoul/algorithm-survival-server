@@ -1,10 +1,10 @@
 const { User } = require("../../../models/User/User");
 const { UserVerification } = require("../../../models/User/UserVerification");
+const { userRank } = require("../../../utils/checkRank");
+const { formatDate } = require("../../../utils/formatDate");
 const solvedac = require("../../../apis/solvedac");
 const crypto = require("crypto");
 const logger = require("../../../../logger");
-const moment = require("moment-timezone");
-const { userRank } = require("../../../utils/checkRank");
 
 const get = {
   me: async (req, res) => {
@@ -26,8 +26,8 @@ const get = {
 
       user = await userRank(user);
 
-      user.createdAt = moment(user.createdAt).tz("Asia/Seoul").format();
-      user.updatedAt = moment(user.updatedAt).tz("Asia/Seoul").format();
+      user.createdAt = formatDate(user.createdAt);
+      user.updatedAt = formatDate(user.updatedAt);
       user.currentStreak = user.currentStreak - user.initialStreak;
 
       delete user.initialStreak;

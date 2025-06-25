@@ -1,5 +1,5 @@
-const cron = require("node-cron");
 const { Group } = require("../models/Group/Group");
+const cron = require("node-cron");
 const logger = require("../../logger");
 
 const initGroupResetJob = async () => {
