@@ -151,8 +151,8 @@ const userUpdateBySolvedac = async (handle) => {
   const profile = await solvedac.profile(handle);
   const streak = await solvedac.grass(handle);
   const current = await solvedac.problem(handle);
-  profile.streak = streak;
-  profile.current = current;
+  profile.streak = await streak;
+  profile.current = await current;
   timer.end(label, logger);
 
   if (profile && streak !== undefined) {
